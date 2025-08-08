@@ -1,14 +1,30 @@
-import { Effect, Fiber } from "effect";
+import { Effect, Console, Schedule, Fiber, Runtime } from "effect";
 
-const program = Effect.gen(function* () {
-  // Fork a fiber that runs indefinitely, printing "Hi!"
-  const fiber = yield* Effect.fork(
-    Effect.forever(Effect.log("Hi!").pipe(Effect.delay("10 millis")))
-  );
-  // yield* Effect.sleep("30 millis");
-  // // Interrupt the fiber and get an Exit value detailing how it finished
-  // const exit = yield* Fiber.interrupt(fiber);
-  // console.log(exit);
+// Daemon fiber that logs a message repeatedly every second
+const daemon = Effect.repeat(
+  Effect.sync(() => console.log("SIDE EFFECT: Daemon fiber running...")),
+  Schedule.fixed("1 second")
+);
+
+// Better approach: Return the fiber handle instead of an Exit
+const startDaemon = Effect.gen(function* () {
+  const fiber = yield* Effect.forkDaemon(daemon);
+  return fiber;
 });
 
-Effect.runFork(program);
+// Run the Effect and get the fiber handle
+const fiber = await Effect.runPromise(startDaemon);
+
+console.log("Daemon fiber has been started.");
+console.log("Now in non-Effect land...");
+
+// Simulate some non-Effect work
+await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait for 5 seconds to see daemon output
+
+console.log("Interrupting daemon fiber...");
+
+// Interrupt the fiber from non-Effect code
+const exitResult = await Effect.runPromise(Fiber.interrupt(fiber));
+console.log("Daemon fiber interrupted:", exitResult);
+
+console.log("Main program finished.");
